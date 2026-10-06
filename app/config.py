@@ -81,7 +81,7 @@ SETTINGS_FILE = DATA_DIR / "settings.json"
 
 # Bump when settings.json needs a one-time migration (legacy Muse/GrokBot builds wrote v1;
 # v3 added the browser_task tool-choice guidance to the stock system prompt).
-SETTINGS_SCHEMA_VERSION = 3
+SETTINGS_SCHEMA_VERSION = 4
 
 for directory in [DATA_DIR, CHATS_DIR, WORKSPACES_DIR]:
     directory.mkdir(parents=True, exist_ok=True)
@@ -116,10 +116,13 @@ class AppSettings(BaseModel):
         "- When you do use a tool, wait for the tool result before answering.\n"
         "- Always respond in clear, well-structured markdown. Boiler Up!\n\n"
         "CHOOSING A WEB TOOL:\n"
+        "- get_weather: for ANY weather question (\"tomorrow's weather\", \"will it rain this weekend\"). "
+        "It answers from a forecast API with no key and no browser, so it never hits a CAPTCHA. "
+        "Never drive the browser for weather.\n"
         "- browser_task: PREFER THIS whenever the answer needs more than one web step, or needs a page "
         "that only works with interaction. It drives a real browser by itself: it runs a search, clicks "
         "results, fills forms, picks dates from dropdowns, scrolls, and reads the answer. Examples: "
-        "\"find tomorrow's weather\", \"look up my flight status\", \"find Purdue's fall enrollment "
+        "\"look up my flight status\", \"find Purdue's fall enrollment "
         "number on their site\", \"get the current price of X\". It returns a finished written answer, "
         "so report that answer back rather than browsing further yourself. The user can watch it work "
         "in the Browser panel.\n"
@@ -167,6 +170,20 @@ def _migrate_settings(data: dict) -> "tuple[dict, bool]":
         if "workspace file tools, spawn_subchat" in sp:
             data["system_prompt"] = defaults.system_prompt
         data["schema_version"] = 3
+        changed = True
+
+    if int(data.get("schema_version") or 0) < 4:
+        # v4: get_weather arrived, and browser_task is no longer the answer for
+        # weather questions. Appending is safe for user-edited prompts: it adds
+        # the new rule without touching anything they wrote.
+        sp = data.get("system_prompt") or ""
+        if "get_weather" not in sp:
+            data["system_prompt"] = sp + (
+                "\nWEATHER: for any weather question, call get_weather with the place name "
+                "(days_ahead 0=today, 1=tomorrow). Never drive the browser for weather: "
+                "it is slower, and weather sites show CAPTCHAs to automated browsers.\n"
+            )
+        data["schema_version"] = 4
         changed = True
 
     # Always backfill anything missing/blank so the file stays complete.

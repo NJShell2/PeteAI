@@ -220,6 +220,10 @@ class BrowserAgent:
         consecutive_errors = 0
         last_page_text = ""
         last_url = ""
+        # Consecutive observations showing a human-verification wall. Two in a
+        # row means the page is genuinely stuck behind it, so the agent asks the
+        # human directly instead of hoping the model remembers to.
+        challenge_streak = 0
         # action+target fingerprints, used to break click-forever loops.
         repeats: Dict[str, int] = {}
         steps_taken = 0
@@ -283,6 +287,11 @@ class BrowserAgent:
                 yield {"type": "error", "error": snapshot["error"]}
                 return
 
+            if snapshot.get("challenge"):
+                challenge_streak += 1
+            else:
+                challenge_streak = 0
+
             observation = browser_session.render_observation(snapshot)
             if snapshot.get("text"):
                 last_page_text = snapshot["text"]
@@ -323,6 +332,22 @@ class BrowserAgent:
                 continue
 
             kind = str(action.get("action", "")).strip().lower()
+
+            if kind in ("ask_user", "ask", "handoff", "need_help"):
+                challenge_streak = 0  # the model asked on its own; reset
+            elif challenge_streak >= 2:
+                # The page is still challenge-walled after the last step. Stop
+                # hoping the model asks and ask the human directly, through the
+                # same ask_user flow below.
+                _detail = (snapshot.get("challenge") or {}).get("detail", "verification")
+                _where = snapshot.get("url") or last_url or "this page"
+                action = {"action": "ask_user", "question": (
+                    f"A human-verification challenge ({_detail}) is blocking {_where}. "
+                    "I cannot solve it myself. Please press Take control, complete the "
+                    "check in the live view, then hand control back (Esc) and I will "
+                    "continue from the page as it is.")}
+                kind = "ask_user"
+                challenge_streak = 0
 
             if kind in ("ask_user", "ask", "handoff", "need_help"):
                 yield {"type": "_step", "step": step, "action": action}
@@ -379,6 +404,12 @@ class BrowserAgent:
                        f"Step {step}: stopping, '{kind}' on the same target repeated "
                        f"{repeats[fingerprint]} times without progress."}
                 break
+
+            if browser_session.is_human_controlled(chat_id or ""):
+                # Grabbed the wheel while the model was thinking: loop back so
+                # the top-of-loop check parks the run instead of firing a step
+                # into a page the user is driving.
+                continue
 
             yield {"type": "_step", "step": step, "action": action}
             result = await browser_session.act(action, chat_id)

@@ -53,6 +53,27 @@ PETE_TOOLS = [
     {
         "type": "function",
         "function": {
+            "name": "get_weather",
+            "description": "Get the weather forecast for a place. USE THIS for any weather question instead of searching the web or driving the browser: it answers directly from a forecast API with no CAPTCHA, no cookies, and no waiting on pages to load.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "location": {
+                        "type": "string",
+                        "description": "Place name, e.g. 'West Lafayette, Indiana'."
+                    },
+                    "days_ahead": {
+                        "type": "integer",
+                        "description": "0 = today, 1 = tomorrow (default), up to 7."
+                    }
+                },
+                "required": ["location"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "take_screenshot",
             "description": "Capture a visual screenshot of a webpage and save it directly into the chat workspace for the user.",
             "parameters": {
@@ -377,7 +398,7 @@ PETE_TOOLS = [
 ]
 
 KNOWN_TOOL_NAMES = {
-    "search_web", "browse_page", "take_screenshot",
+    "search_web", "browse_page", "get_weather", "take_screenshot",
     "extract_links", "interact_with_page", "browser_task",
     "list_workspace_files", "read_workspace_file",
     "write_workspace_file", "spawn_subchat",
@@ -685,6 +706,13 @@ class PeteAgent:
             url = args.get("url", "")
             return await browser_tool.browse_page(url)
 
+        elif name == "get_weather":
+            from app.weather_tool import get_weather as _get_weather
+            return await _get_weather(
+                args.get("location", ""),
+                int(args.get("days_ahead") if args.get("days_ahead") is not None else 1),
+            )
+
         elif name == "take_screenshot":
             url = args.get("url", "")
             filename = args.get("filename")
@@ -714,11 +742,15 @@ class PeteAgent:
         elif name == "browser_task":
             # Drives the persistent session. Progress is echoed as status events so
             # the user can follow along in the live browser view.
+            # NOTE: the run is keyed by chat.id, not the workspace id. The UI sends
+            # takeover / answer requests with the chat id, and a subchat's
+            # workspace_id is its parent's -- keying by workspace silently broke
+            # takeovers and ask-card answers in subchats (the agent never parked).
             from app.browser_agent import browser_agent as _browser_agent
             goal = args.get("goal", "")
             max_steps = int(args.get("max_steps") or 0) or 25
             answer = ""
-            async for event in _browser_agent.run(goal, chat_id=ws_id, max_steps=max_steps):
+            async for event in _browser_agent.run(goal, chat_id=chat.id, max_steps=max_steps):
                 if event.get("type") == "_final":
                     answer = event.get("content", "")
                 elif event.get("type") == "error":
