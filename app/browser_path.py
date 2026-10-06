@@ -15,8 +15,14 @@ answer cannot change within a process without a restart.
 
 Returning ``None`` means nothing usable was found; callers pass that through to
 Playwright unchanged, which preserves its own (clearer) error message.
+
+Probing is platform-aware: the Playwright browser cache lives under
+%LOCALAPPDATA% on Windows, ~/.cache on Linux, and ~/Library/Caches on macOS,
+and on non-Windows systems the PATH is also searched for a system browser.
 """
 import os
+import shutil
+import sys
 from pathlib import Path
 from typing import List, Optional
 
@@ -39,8 +45,80 @@ _CANDIDATE_TEMPLATES: List[str] = [
     r"{localappdata}\BraveSoftware\Brave-Browser\Application\brave.exe",
 ]
 
+# System browser binary names searched on PATH (non-Windows).
+_PATH_BINARIES: List[str] = [
+    "chromium", "chromium-browser", "google-chrome", "google-chrome-stable",
+    "brave-browser", "microsoft-edge", "microsoft-edge-stable",
+]
+
 _cached_path: Optional[str] = None
 _cache_resolved = False
+
+
+def _playwright_browsers_root() -> Optional[Path]:
+    """Where ``playwright install`` puts browsers, per platform.
+
+    Honors PLAYWRIGHT_BROWSERS_PATH, the same override the Playwright driver
+    itself respects.
+    """
+    override = os.environ.get("PLAYWRIGHT_BROWSERS_PATH")
+    if override:
+        return Path(override)
+    if sys.platform == "win32":
+        root = os.environ.get("LOCALAPPDATA")
+        return Path(root) / "ms-playwright" if root else None
+    home = Path.home()
+    if sys.platform == "darwin":
+        return home / "Library" / "Caches" / "ms-playwright"
+    return home / ".cache" / "ms-playwright"
+
+
+def _bundled_executable(headless: bool) -> Optional[Path]:
+    """An actual browser binary inside the Playwright cache, if one exists.
+
+    Prefers a full Chromium (works headless or headful); the headless shell is
+    only returned when a headless launch was requested, since it cannot do
+    headful at all.
+    """
+    root = _playwright_browsers_root()
+    if not root:
+        return None
+    try:
+        if not root.is_dir():
+            return None
+        children = [c for c in root.iterdir() if c.is_dir() and c.name.startswith("chromium")]
+    except OSError:
+        return None
+    # Full builds first, headless shells last.
+    children.sort(key=lambda c: c.name.startswith("chromium_headless_shell"))
+    full_rels = (
+        "chrome-linux64/chrome",  # current Playwright layout
+        "chrome-linux/chrome",    # older Playwright layout
+        "chrome-mac/Chromium.app/Contents/MacOS/Chromium",
+        "chrome-win/chrome.exe",
+    )
+    shell_rels = (
+        "chrome-headless-shell-linux64/chrome-headless-shell",
+        "chrome-headless-shell-mac/chrome-headless-shell",
+        "chrome-headless-shell-win64/chrome-headless-shell.exe",
+    )
+    for child in children:
+        for rel in full_rels:
+            exe = child / rel
+            try:
+                if exe.is_file():
+                    return exe
+            except OSError:
+                continue
+        if headless:
+            for rel in shell_rels:
+                shell = child / rel
+                try:
+                    if shell.is_file():
+                        return shell
+                except OSError:
+                    continue
+    return None
 
 
 def _candidate_paths() -> List[Path]:
@@ -74,26 +152,26 @@ def bundled_chromium_exists() -> bool:
         # An explicit override means the operator has made a decision; trust it
         # rather than second-guessing it against the bundled build.
         return False
-    root = os.environ.get("LOCALAPPDATA")
+    root = _playwright_browsers_root()
     if not root:
         return False
-    ms_playwright = Path(root) / "ms-playwright"
     try:
-        if not ms_playwright.is_dir():
+        if not root.is_dir():
             return False
         return any(
             child.is_dir() and child.name.startswith("chromium")
-            for child in ms_playwright.iterdir()
+            for child in root.iterdir()
         )
     except OSError:
         return False
 
 
-def find_chrome_path() -> Optional[str]:
+def find_chrome_path(headless: bool = True) -> Optional[str]:
     """Returns a browser executable to hand Playwright, or None if none exists.
 
     Cached after the first call: this is on the hot path of every browser
-    launch, and probing the filesystem each time buys nothing.
+    launch, and probing the filesystem each time buys nothing. Note the cache
+    does not distinguish headless from headful; the first call wins.
     """
     global _cached_path, _cache_resolved
     if _cache_resolved:
@@ -112,6 +190,11 @@ def find_chrome_path() -> Optional[str]:
             )
         return _cached_path
 
+    bundled = _bundled_executable(headless)
+    if bundled:
+        _cached_path = str(bundled)
+        return _cached_path
+
     for candidate in _candidate_paths():
         try:
             if candidate.is_file():
@@ -119,6 +202,13 @@ def find_chrome_path() -> Optional[str]:
                 return _cached_path
         except OSError:
             continue
+
+    if sys.platform != "win32":
+        for binary in _PATH_BINARIES:
+            found = shutil.which(binary)
+            if found:
+                _cached_path = found
+                return _cached_path
 
     return _cached_path
 
@@ -132,7 +222,7 @@ def launch_kwargs_for_chrome(headless: bool) -> dict:
     """
     kwargs = {"headless": headless}
     if not bundled_chromium_exists():
-        chrome = find_chrome_path()
+        chrome = find_chrome_path(headless)
         if chrome:
             kwargs["executable_path"] = chrome
     return kwargs
