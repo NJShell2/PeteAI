@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pete AI | Purdue GenAI Studio</title>
+  
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  
+  <!-- Highlight.js for code syntax highlighting -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+
+  <!-- Marked for markdown -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.0/marked.min.js"></script>
+  
+  <!-- Custom CSS -->
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <div class="app-container">
+    
+    <!-- LEFT SIDEBAR: Conversations & Subchats -->
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <div class="logo-container">
+          <span class="logo-badge">PURDUE</span>
+          <span class="logo-title">PETE AI</span>
+        </div>
+        <button class="btn-icon" id="btnOpenSettings" title="Settings">
+          <i class="fa-solid fa-gear"></i>
+        </button>
+      </div>
+
+      <button class="btn-new-chat" id="btnNewChat">
+        <i class="fa-solid fa-plus"></i> New Chat
+      </button>
+
+      <div class="chat-list" id="chatListContainer">
+        <!-- Rendered via JS -->
+      </div>
+
+      <div class="sidebar-footer">
+        <div style="font-size: 11.5px; color: var(--text-muted);">
+          <i class="fa-solid fa-server"></i> RCAC Studio API
+        </div>
+        <button class="btn-icon" id="btnToggleRoadmap" title="Pete Squad Architecture">
+          <i class="fa-solid fa-network-wired"></i> Pete Squad
+        </button>
+      </div>
+    </aside>
+
+    <!-- CENTER: Main Chat Container -->
+    <main class="main-chat-container">
+      <header class="chat-topbar">
+        <div class="topbar-info">
+          <!-- Dynamic Breadcrumbs -->
+          <nav class="breadcrumbs" id="breadcrumbsContainer">
+            <span class="breadcrumb-item current">Welcome</span>
+          </nav>
+          <div class="topbar-title-row">
+            <span id="currentChatTitle" class="topbar-title">Welcome to Pete AI</span>
+            <span id="subchatBadge" class="badge-subchat" style="display: none;">
+              <i class="fa-solid fa-code-branch"></i> Subchat
+            </span>
+            <button id="btnSynthesizeSubchat" class="btn-synthesize" style="display: none;" title="Synthesize findings back to parent chat">
+              <i class="fa-solid fa-wand-magic-sparkles"></i> Synthesize to Parent
+            </button>
+          </div>
+        </div>
+
+        <div style="display: flex; align-items: center; gap: 12px;">
+          <!-- Agent Mode Switcher (Solo vs Squad) -->
+          <div class="mode-toggle-group">
+            <button class="mode-btn active" id="btnModeSolo" title="Single Agent with Subchats">
+              <i class="fa-solid fa-user"></i> Pete Solo
+            </button>
+            <button class="mode-btn" id="btnModeSquad" title="Autonomous Multi-Agent Team (Planner, Browser, Code, Critic)">
+              <i class="fa-solid fa-users"></i> Pete Squad
+            </button>
+          </div>
+
+          <!-- Model Selector -->
+          <select id="modelSelector" class="model-select">
+            <option value="llama3.1:latest">Llama 3.1</option>
+          </select>
+
+          <!-- Toggle Right Workspace Panel -->
+          <button class="btn-icon" id="btnToggleRightPanel" title="Toggle Workspace & Browser">
+            <i class="fa-solid fa-folder-open"></i> <span id="panelToggleLabel">Workspace</span>
+          </button>
+        </div>
+      </header>
+
+      <!-- Message History Stream -->
+      <div class="messages-container" id="messagesContainer">
+        <!-- Welcoming placeholder -->
+        <div class="message-card">
+          <div class="avatar avatar-pete">P</div>
+          <div class="message-body">
+            <div class="message-header">Pete AI</div>
+            <div class="message-content">
+              <p>Welcome! I am <strong>Pete AI</strong>, connected directly to <strong>Purdue GenAI Studio</strong>.</p>
+              <br/>
+              <p><strong>Modes Available:</strong></p>
+              <ul style="margin-left: 20px; margin-top: 6px;">
+                <li>🌿 <strong>Pete Solo</strong>: Focused research agent with hierarchical subchats. Branch off tasks and click <em>"Synthesize to Parent"</em> to consolidate findings.</li>
+                <li>🚀 <strong>Pete Squad</strong>: Autonomous multi-agent pipeline. Orchestrator, Browser Specialist, Workspace Coder, and Critic coordinate to solve complex problems.</li>
+              </ul>
+              <br/>
+              <p><strong>Integrated Tools:</strong></p>
+              <ul style="margin-left: 20px; margin-top: 6px;">
+                <li>📂 <strong>Workspace Editor</strong>: Create, edit, and inspect code or documents in your sandbox.</li>
+                <li>🌐 <strong>Headless Browser & Search</strong>: Live Playwright web navigation, article scraping, and screenshots.</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Chat Input Area -->
+      <footer class="chat-input-container">
+        <div class="input-box-wrapper">
+          <textarea id="promptInput" placeholder="Ask Pete, search the web, analyze documents, or type /subchat..." rows="1"></textarea>
+          <div class="input-actions">
+            <div class="quick-tools">
+              <button class="tool-pill" id="btnQuickUpload">
+                <i class="fa-solid fa-paperclip"></i> Upload
+              </button>
+              <button class="tool-pill" id="btnQuickSearch">
+                <i class="fa-solid fa-globe"></i> Web Search
+              </button>
+              <button class="tool-pill" id="btnQuickSubchat">
+                <i class="fa-solid fa-code-branch"></i> Branch Subchat
+              </button>
+            </div>
+            <button class="btn-send" id="btnSendMessage" title="Send Message">
+              <i class="fa-solid fa-arrow-up"></i>
+            </button>
+          </div>
+        </div>
+      </footer>
+    </main>
+
+    <!-- RIGHT PANEL: Workspace Files & Web Browser Preview -->
+    <aside class="right-panel" id="rightPanel">
+      <div class="tabs-header">
+        <button class="tab-btn active" data-tab="tab-files">
+          <i class="fa-solid fa-folder"></i> Workspace
+        </button>
+        <button class="tab-btn" data-tab="tab-browser">
+          <i class="fa-solid fa-compass"></i> Browser
+        </button>
+      </div>
+
+      <!-- TAB 1: WORKSPACE FILES -->
+      <div class="tab-content" id="tab-files">
+        <div class="file-dropzone" id="fileDropzone">
+          <i class="fa-solid fa-cloud-arrow-up fa-2x"></i>
+          <p style="margin-top: 6px;">Drag & drop files here, or click to upload</p>
+          <input type="file" id="fileInputHidden" style="display: none;" multiple>
+        </div>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+          <span style="font-size: 11.5px; font-weight: 700; color: var(--text-muted); text-transform: uppercase;">Workspace Files</span>
+          <div style="display: flex; gap: 4px;">
+            <button class="btn-icon" id="btnOpenNewFileModal" style="padding: 2px 6px; font-size: 11px;">
+              <i class="fa-solid fa-plus"></i> New File
+            </button>
+            <button class="btn-icon" id="btnRefreshFiles" style="padding: 2px 6px; font-size: 11px;">
+              <i class="fa-solid fa-rotate-right"></i>
+            </button>
+          </div>
+        </div>
+        <div id="fileListContainer">
+          <p style="font-size: 12px; color: var(--text-muted); text-align: center; margin-top: 20px;">No files in workspace yet.</p>
+        </div>
+      </div>
+
+      <!-- TAB 2: LIVE BROWSER -->
+      <div class="tab-content" id="tab-browser" style="display: none;">
+        <!-- Focus mode lives with the browser, not in the chat topbar. The
+             topbar is inside the 420px rail that focus mode itself creates, so
+             a control placed there gets pushed off the right edge of the window
+             and the mode becomes impossible to leave. Here it travels with the
+             region that grows. Label stays stable; aria-pressed carries state. -->
+        <div class="browser-focus-row">
+          <button class="btn-takeover" id="btnToggleFocusMode" aria-pressed="false"
+                  title="Give the browser the full window and move the chat to a side rail. Press Escape to undo.">
+            <i class="fa-solid fa-table-columns"></i>
+            <span id="focusToggleLabel">Focus browser</span>
+          </button>
+        </div>
+        <!-- Goal bar: hand the agent a task and watch it work -->
+        <div class="browser-goal-row">
+          <input type="text" id="browserGoalInput" class="form-control"
+                 placeholder="Give Pete a goal, e.g. find tomorrow's weather" style="flex: 1;">
+          <button class="btn-icon" id="btnBrowserRunGoal" title="Let Pete drive the browser">
+            <i class="fa-solid fa-robot"></i>
+          </button>
+          <!-- Stop appears only while a run is going, next to Run so the two are
+               never confused. Labelled "Stop" rather than a bare icon: it is
+               destructive, and an unlabelled square is easy to hit by accident
+               next to the Run button. -->
+          <button class="btn-icon btn-stop" id="btnBrowserStopGoal" type="button"
+                  title="Stop Pete browsing" aria-label="Stop Pete browsing"
+                  style="display: none;">
+            <i class="fa-solid fa-stop"></i>
+            <span>Stop</span>
+          </button>
+        </div>
+        <!-- Who is driving: Pete by default, you on request. This button stays
+             the ONLY way to take the wheel -- no click-to-take, no hold-to-take. -->
+        <div class="browser-control-row">
+          <button class="btn-takeover" id="btnBrowserTakeover" aria-pressed="false"
+                  title="Click, type and scroll in the page yourself. Press Escape to hand control back to Pete.">
+            <i class="fa-solid fa-hand-pointer"></i>
+            <span id="browserTakeoverLabel">Take control</span>
+          </button>
+          <span class="browser-control-hint" id="browserControlHint">
+            Pete is driving. Take over to click, type or solve a CAPTCHA.
+          </span>
+        </div>
+        <div id="browserGoalStatus" class="browser-goal-status"></div>
+
+        <!-- Manual address bar -->
+        <div class="form-group" style="margin-bottom: 8px;">
+          <div style="display: flex; gap: 6px;">
+            <input type="text" id="browserUrlInput" class="form-control" placeholder="https://purdue.edu" style="flex: 1;">
+            <button class="btn-icon" id="btnManualBrowse" title="Go">
+              <i class="fa-solid fa-arrow-right"></i>
+            </button>
+            <button class="btn-icon" id="btnManualBack" title="Back">
+              <i class="fa-solid fa-arrow-left"></i>
+            </button>
+            <button class="btn-icon" id="btnManualReload" title="Reload page">
+              <i class="fa-solid fa-rotate-right"></i>
+            </button>
+            <button class="btn-icon" id="btnManualScreenshot" title="Save a screenshot to the workspace">
+              <i class="fa-solid fa-camera"></i>
+            </button>
+          </div>
+        </div>
+
+        <!-- tabindex: the viewport takes keyboard focus so typed keys reach the page -->
+        <div class="browser-viewport" id="browserViewport" tabindex="0"
+             aria-label="Live browser viewport. Take control to click, type and scroll.">
+          <img id="browserFrameImage" alt="Live browser view" style="display: none;" draggable="false">
+          <div class="browser-viewport-placeholder" id="browserViewportPlaceholder">
+            <i class="fa-solid fa-display fa-2x"></i>
+            <p style="margin-top: 8px;">The live page appears here.</p>
+            <p style="font-size: 11.5px;">Run a goal above, or type a URL to browse.</p>
+          </div>
+          <div class="browser-viewport-badge" id="browserLiveBadge" style="display: none;">
+            <span class="live-dot"></span> LIVE
+          </div>
+
+          <!-- Shown while the user holds the wheel, so it is obvious clicks land -->
+          <div class="browser-viewport-overlay" id="browserUserBanner" style="display: none;">
+            <i class="fa-solid fa-hand-pointer"></i>
+            <span>You have control &mdash; click, type and scroll freely &middot; Esc to give Pete back</span>
+          </div>
+
+          <!-- Shown while Pete holds the wheel, so the page does not look
+               clickable. `is-pete` also greys the viewport, reinforcing it. -->
+          <div class="browser-viewport-overlay is-pete" id="browserPeteBanner">
+            <i class="fa-solid fa-robot"></i>
+            <span>Pete is driving &mdash; take control to click or type</span>
+          </div>
+
+          <!-- The agent's question, with the reply box that releases it -->
+          <div class="browser-ask-card" id="browserAskCard" style="display: none;">
+            <div class="browser-ask-header">
+              <i class="fa-solid fa-circle-question"></i>
+              <span>Pete needs your help</span>
+            </div>
+            <p class="browser-ask-question" id="browserAskQuestion"></p>
+            <div class="browser-ask-actions">
+              <input type="text" id="browserAskInput" class="form-control"
+                     placeholder="Reply, or solve it and press Resume" style="flex: 1;">
+              <button class="btn-icon" id="btnBrowserAskSend" title="Send your reply">
+                <i class="fa-solid fa-paper-plane"></i>
+              </button>
+              <button class="btn-icon" id="btnBrowserAskResume" title="Done &mdash; hand control back">
+                <i class="fa-solid fa-play"></i> Resume
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Clickable element map: each ref is a real, clickable target -->
+        <details class="browser-elements" id="browserElementsPanel">
+          <summary>Page elements <span id="browserElementsCount" class="badge-count">0</span></summary>
+          <div id="browserElementList" class="browser-element-list">
+            <p style="font-size: 12px; color: var(--text-muted);">No page loaded yet.</p>
+          </div>
+        </details>
+
+        <div id="browserActivityLog" style="font-size: 12px; color: var(--text-muted);">
+          <p style="text-align: center; margin-top: 10px;">Agent steps and tool output appear here.</p>
+        </div>
+      </div>
+    </aside>
+
+  </div>
+
+  <!-- SETTINGS MODAL -->
+  <div class="modal-overlay" id="settingsModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 style="font-size: 16px;"><i class="fa-solid fa-sliders"></i> Purdue GenAI Studio Settings</h3>
+        <button class="btn-icon" id="btnCloseSettings">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label for="cfgApiUrl">Purdue GenAI Studio Base URL</label>
+          <input type="text" id="cfgApiUrl" class="form-control" value="https://genai.rcac.purdue.edu/api/v1">
+          <small style="color: var(--text-muted); font-size: 11px;">OpenAI-compatible endpoint of Purdue Open WebUI</small>
+        </div>
+        <div class="form-group">
+          <label for="cfgApiKey">Open WebUI API Key</label>
+          <input type="password" id="cfgApiKey" class="form-control" placeholder="Found in Purdue Open WebUI -> Settings -> Account -> API Keys">
+          <small style="color: var(--text-muted); font-size: 11px;">Stored securely in data/settings.json.</small>
+        </div>
+        <div class="form-group">
+          <button class="btn-icon" id="btnTestConnection" style="align-self: flex-start;">
+            <i class="fa-solid fa-plug"></i> Test Connection & Fetch Models
+          </button>
+          <span id="connectionStatus" style="font-size: 12px; margin-top: 4px;"></span>
+        </div>
+        <div class="form-group">
+          <label for="cfgDefaultModel">Default Model</label>
+          <select id="cfgDefaultModel" class="form-control">
+            <option value="llama3.1:latest">llama3.1:latest</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="cfgSystemPrompt">System Prompt</label>
+          <textarea id="cfgSystemPrompt" class="form-control" rows="3"></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-icon" id="btnCancelSettings">Cancel</button>
+        <button class="btn-new-chat" id="btnSaveSettings" style="margin: 0; padding: 6px 14px;">Save Settings</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- FILE VIEWER & IN-BROWSER CODE EDITOR MODAL -->
+  <div class="modal-overlay" id="fileViewerModal">
+    <div class="modal-content" style="width: 780px;">
+      <div class="modal-header">
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <h3 id="viewerFileName" style="font-size: 15px;">File Editor</h3>
+          <span id="fileSaveStatus" style="font-size: 11px; color: var(--accent-green); display: none;">Saved!</span>
+        </div>
+        <div style="display: flex; gap: 6px;">
+          <button class="btn-icon" id="btnToggleEditMode" title="Toggle Edit Mode">
+            <i class="fa-solid fa-pen-to-square"></i> <span id="editModeLabel">Edit</span>
+          </button>
+          <button class="btn-icon" id="btnCloseViewer">✕</button>
+        </div>
+      </div>
+      <div class="modal-body" style="padding: 12px;">
+        <pre id="viewerFileContent" style="background: #0d1117; padding: 12px; border-radius: 6px; overflow-x: auto; max-height: 450px; font-size: 12.5px;"></pre>
+        <textarea id="editorFileContent" class="code-editor-textarea" style="display: none;"></textarea>
+        <div id="viewerImageContainer" style="display: none; text-align: center;">
+          <img id="viewerImage" src="" style="max-width: 100%; max-height: 450px; border-radius: 6px;">
+        </div>
+      </div>
+      <div class="modal-footer" style="display: flex; justify-content: space-between;">
+        <a id="btnDownloadFile" class="btn-icon" href="#" download>
+          <i class="fa-solid fa-download"></i> Download
+        </a>
+        <button class="btn-new-chat" id="btnSaveFileContent" style="margin: 0; padding: 6px 14px; display: none;">
+          <i class="fa-solid fa-floppy-disk"></i> Save File
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- CREATE NEW FILE MODAL -->
+  <div class="modal-overlay" id="newFileModal">
+    <div class="modal-content" style="width: 480px;">
+      <div class="modal-header">
+        <h3 style="font-size: 15px;"><i class="fa-solid fa-file-circle-plus"></i> Create Workspace File</h3>
+        <button class="btn-icon" id="btnCloseNewFileModal">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label for="newFileNameInput">Filename (e.g., script.py, notes.md, data.csv)</label>
+          <input type="text" id="newFileNameInput" class="form-control" placeholder="filename.ext">
+        </div>
+        <div class="form-group">
+          <label for="newFileContentInput">Initial Content (Optional)</label>
+          <textarea id="newFileContentInput" class="form-control" rows="5" placeholder="// Add initial code or text..."></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-icon" id="btnCancelNewFile">Cancel</button>
+        <button class="btn-new-chat" id="btnSubmitNewFile" style="margin: 0; padding: 6px 14px;">Create</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- PETE SQUAD ARCHITECTURE MODAL -->
+  <div class="modal-overlay" id="roadmapModal">
+    <div class="modal-content" style="width: 650px;">
+      <div class="modal-header">
+        <h3 style="font-size: 16px;"><i class="fa-solid fa-network-wired"></i> Pete Squad Multi-Agent Architecture</h3>
+        <button class="btn-icon" id="btnCloseRoadmap">✕</button>
+      </div>
+      <div class="modal-body">
+        <p style="font-size: 13.5px; color: var(--text-main);">
+          Toggle between <strong>Pete Solo</strong> and <strong>Pete Squad</strong> anytime in the top bar:
+        </p>
+        <div style="background: var(--bg-primary); padding: 14px; border-radius: 8px; font-size: 13px; line-height: 1.6; border: 1px solid var(--border-color);">
+          <p><strong>Pete Squad Team Specialists:</strong></p>
+          <ul style="margin-left: 20px; margin-top: 6px;">
+            <li>🧠 <strong>Orchestrator Agent</strong>: Decomposes problems into actionable subtasks.</li>
+            <li>🌐 <strong>Browser Specialist</strong>: Autonomous Playwright research & live web scraping.</li>
+            <li>💻 <strong>Workspace Specialist</strong>: Sandbox file I/O, script writing, and local data analysis.</li>
+            <li>🧐 <strong>Critic & Synthesizer</strong>: Fact verification, code check, and structured synthesis.</li>
+          </ul>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-icon" id="btnCloseRoadmapBtn">Got it</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Application Script -->
+  <script src="/js/app.js"></script>
+  <!-- Live browser panel: depends on the helpers above, so it loads second. -->
+  <script src="/js/browser_live.js"></script>
+</body>
+</html>
