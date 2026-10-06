@@ -15,7 +15,9 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from playwright.async_api import async_playwright
 
 BASE = os.path.dirname(os.path.abspath(__file__))
-CHROME = r"C:\Program Files\Google\Chrome\Application\chrome.exe"
+# Browser binary for the harness. Override with PETE_TEST_CHROME; when unset,
+# Playwright launches its own bundled Chromium (needs `playwright install`).
+CHROME = os.environ.get("PETE_TEST_CHROME")
 
 
 class QuietHandler(SimpleHTTPRequestHandler):
@@ -45,7 +47,8 @@ def check(name, ok, detail=""):
 async def main():
     port = serve()
     async with async_playwright() as p:
-        browser = await p.chromium.launch(headless=True, executable_path=CHROME)
+        browser = await p.chromium.launch(headless=True, **(
+            {"executable_path": CHROME} if CHROME else {}))
         page = await browser.new_page(viewport={"width": 1600, "height": 900})
 
         errors = []
