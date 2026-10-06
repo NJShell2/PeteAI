@@ -2,7 +2,7 @@ from typing import List, Dict, Any, Optional
 from openai import AsyncOpenAI
 import httpx
 
-from app.config import load_settings
+from app.config import load_settings, get_api_key
 from app.console import safe_print
 
 class LLMClient:
@@ -11,7 +11,12 @@ class LLMClient:
 
     def get_client(self, api_key: Optional[str] = None, base_url: Optional[str] = None) -> AsyncOpenAI:
         settings = load_settings()
-        key = api_key or settings.purdue_api_key or "sk-dummy-key"
+        key = api_key or get_api_key(settings)
+        if not key:
+            raise RuntimeError(
+                "No Purdue GenAI Studio API key is configured. Open Settings, "
+                "paste your key, and test the connection before chatting."
+            )
         url = base_url or settings.purdue_api_url
         
         # Open WebUI endpoint requires trailing slash or /v1 depending on setup
@@ -27,9 +32,17 @@ class LLMClient:
             http_client=httpx.AsyncClient(verify=False) # In case Purdue RCAC self-signed/internal certs
         )
 
-    async def list_models(self) -> List[Dict[str, Any]]:
+    async def list_models(self, api_key: Optional[str] = None,
+                          base_url: Optional[str] = None,
+                          strict: bool = False) -> List[Dict[str, Any]]:
+        """List models from Studio.
+
+        ``strict=True`` raises on any failure (used by the connection test);
+        otherwise a stale-but-useful offline fallback list is returned so the
+        UI still has models to offer during a network outage.
+        """
         settings = load_settings()
-        client = self.get_client()
+        client = self.get_client(api_key=api_key, base_url=base_url)
         try:
             response = await client.models.list()
             models = []
@@ -42,6 +55,8 @@ class LLMClient:
             return models
         except Exception as e:
             safe_print(f"Failed to fetch models from Purdue GenAI Studio: {e}")
+            if strict:
+                raise
             # Offline fallback: Purdue GenAI Studio models (verified live model IDs)
             return [
                 {"id": "gemma4:26b-a4b", "name": "Gemma 4 26B (A4B)", "owned_by": "purdue"},
