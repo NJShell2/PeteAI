@@ -10,6 +10,7 @@ Run with the app already serving on 127.0.0.1:8000.
 """
 
 import asyncio
+import os
 
 from playwright.async_api import async_playwright
 
@@ -32,12 +33,20 @@ CASES = [
 async def main():
     failures = []
     async with async_playwright() as p:
+        _chrome = os.environ.get("PETE_TEST_CHROME")
         browser = await p.chromium.launch(
-            executable_path=r"C:\Program Files\Google\Chrome\Application\chrome.exe")
+            **({"executable_path": _chrome} if _chrome else {}))
         page = await browser.new_page(viewport={"width": 1600, "height": 900})
         page.on("pageerror", lambda e: failures.append(f"page error: {e}"))
         await page.goto("http://127.0.0.1:8000/", wait_until="networkidle")
         await page.wait_for_timeout(2500)
+        # First-run settings modal auto-opens when no API key is saved; it is an
+        # overlay, so dismiss it before driving the browser panel.
+        modal_open = await page.evaluate(
+            "() => getComputedStyle(document.getElementById('settingsModal')).display !== 'none'")
+        if modal_open:
+            await page.click("#btnCloseSettings")
+            await page.wait_for_timeout(300)
         # The takeover controls are display:none until the browser tab is open.
         await page.click('[data-tab="tab-browser"]')
         await page.wait_for_timeout(1000)
