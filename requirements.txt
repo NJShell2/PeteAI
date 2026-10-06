@@ -1,0 +1,15 @@
+fastapi>=0.110.0
+uvicorn>=0.28.0
+# The live browser view streams page frames over a WebSocket. Uvicorn refuses
+# upgrade requests unless one of these is present.
+websockets>=12.0
+pydantic>=2.0.0
+openai>=1.14.0
+playwright>=1.42.0
+python-multipart>=0.0.9
+aiofiles>=23.2.1
+httpx>=0.27.0
+beautifulsoup4>=4.12.0
+python-dotenv>=1.0.0
+ddgs>=9.0.0
+
