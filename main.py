@@ -31,7 +31,17 @@ except Exception as e:
 
 
 def open_browser(url: str):
-    time.sleep(1.2)
+    # Wait until the server actually answers before opening the tab. A fixed
+    # sleep was a race: on slower machines uvicorn was still starting when the
+    # browser loaded, so the first load failed and the user had to refresh.
+    import urllib.request
+    for _ in range(60):  # up to ~30 seconds
+        try:
+            with urllib.request.urlopen(url, timeout=2) as response:
+                if response.status < 400:
+                    break
+        except Exception:
+            time.sleep(0.5)
     try:
         webbrowser.open(url)
     except Exception as e:
