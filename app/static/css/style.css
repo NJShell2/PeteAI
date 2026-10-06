@@ -1224,3 +1224,31 @@ textarea#promptInput {
   flex-shrink: 0;
 }
 
+
+/* Typing indicator: three blinking dots shown while Pete is working. */
+.typing-dots {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 2px;
+}
+.typing-dots span {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--text-muted);
+  opacity: 0.35;
+  animation: typing-bounce 1.2s infinite ease-in-out;
+}
+.typing-dots span:nth-child(2) { animation-delay: 0.15s; }
+.typing-dots span:nth-child(3) { animation-delay: 0.3s; }
+@keyframes typing-bounce {
+  0%, 60%, 100% { transform: translateY(0); opacity: 0.35; }
+  30% { transform: translateY(-6px); opacity: 1; }
+}
+.typing-status {
+  color: var(--text-muted);
+  font-size: 13px;
+  margin-left: 10px;
+  vertical-align: middle;
+}

@@ -466,28 +466,9 @@ function appendMessageCard(role, content, msgId = null, toolCalls = null, metada
   }
 
   let badgesHtml = "";
-  const usedTools = (toolCalls && toolCalls.length > 0)
-    ? toolCalls.map(tc => {
-        const fn = tc.function || {};
-        const args = fn.arguments;
-        return { name: fn.name || "tool", args: typeof args === "string" ? args : JSON.stringify(args || {}) };
-      })
-    // Text-emitted tool calls are not persisted as tool_calls (see agent.py), so fall
-    // back to the tool names recorded in message metadata.
-    : (metadata && Array.isArray(metadata.tools_used)
-        ? metadata.tools_used.map(name => ({ name, args: "" }))
-        : []);
-
-  usedTools.forEach(t => {
-    badgesHtml += `
-      <div class="tool-call-badge">
-        <div class="tool-call-header">
-          <i class="fa-solid ${toolIcon(t.name)}"></i> Used Tool: ${escapeHtml(t.name)}
-        </div>
-        <div class="tool-output-details">${escapeHtml(t.args)}</div>
-      </div>
-    `;
-  });
+  // Past tool calls stay out of the chat transcript: the finished answer is
+  // the output, and the working status already said what Pete did. (The
+  // subchat-synthesis banner below is context, not tool JSON, so it stays.)
 
   if (metadata && metadata.type === "subchat_synthesis") {
     badgesHtml += `
@@ -579,9 +560,9 @@ async function handleSendMessage() {
         if (payload.type === "clear_content") {
           // Erase any raw JSON tool call from screen
           accumulatedContent = "";
-          contentEl.innerHTML = `<span style="color: var(--text-muted);"><i class="fa-solid fa-spinner fa-spin"></i> Running tool...</span>`;
+          contentEl.innerHTML = `<span class="typing-dots"><span></span><span></span><span></span></span><span class="typing-status">Running tool...</span>`;
         } else if (payload.type === "status") {
-          contentEl.innerHTML = `<span style="color: var(--text-muted);"><i class="fa-solid fa-spinner fa-spin"></i> ${escapeHtml(payload.data)}</span>`;
+          contentEl.innerHTML = `<span class="typing-dots"><span></span><span></span><span></span></span><span class="typing-status">${escapeHtml(payload.data)}</span>`;
         } else if (payload.type === "agent_state") {
           const stepDiv = document.createElement("div");
           stepDiv.className = "agent-step-badge";
@@ -624,18 +605,22 @@ async function handleSendMessage() {
           scrollMessagesToBottom();
         } else if (payload.type === "tool_call") {
           logBrowserActivity(`Tool Called: ${payload.name} (${JSON.stringify(payload.arguments)})`);
-          
-          let icon = toolIcon(payload.name);
 
-          const badge = document.createElement("div");
-          badge.className = "tool-call-badge";
-          badge.innerHTML = `
-            <div class="tool-call-header">
-              <i class="fa-solid ${icon}"></i> Used Tool: ${escapeHtml(payload.name)}
-            </div>
-            <div class="tool-output-details">${escapeHtml(JSON.stringify(payload.arguments))}</div>
-          `;
-          badgesArea.appendChild(badge);
+          // No raw "Used Tool" badge in the chat: the working status line above
+          // already says what Pete is doing, and the finished answer is the
+          // output. Side effects below stay.
+          if ((payload.name || "").includes("file") || payload.name.includes("screenshot")) {
+            await loadWorkspaceFiles();
+          }
+          if (payload.name === "spawn_subchat") {
+            await loadChatList();
+          }
+          // browser_task drove the shared page: bring the live view up to date
+          // so the user lands on the page the agent just finished reading.
+          if (payload.name === "browser_task") {
+            connectLiveView();
+            await refreshElements();
+          }
         } else if (payload.type === "tool_result") {
           logBrowserActivity(`Tool Result from ${payload.name}: complete`);
           if (payload.name === "take_screenshot" && payload.result && payload.result.filename) {

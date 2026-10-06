@@ -406,6 +406,29 @@ KNOWN_TOOL_NAMES = {
     "write_local_file", "create_local_dir", "move_local_path", "delete_local_path",
 }
 
+# What the chat shows while a tool runs. Plain words, never raw tool names --
+# the user asked for output, not a tour of the machinery.
+TOOL_STATUS_LABELS = {
+    "search_web": "Searching the web",
+    "get_weather": "Checking the forecast",
+    "browse_page": "Reading that page",
+    "browser_task": "Browsing for that",
+    "take_screenshot": "Capturing that page",
+    "extract_links": "Collecting links",
+    "interact_with_page": "Working with that page",
+    "list_workspace_files": "Looking through workspace files",
+    "read_workspace_file": "Reading that file",
+    "write_workspace_file": "Writing that file",
+    "spawn_subchat": "Starting a focused subchat",
+    "list_local_dir": "Looking through that folder",
+    "read_local_file": "Reading that file",
+    "search_files": "Searching your files",
+    "write_local_file": "Writing that file",
+    "create_local_dir": "Creating that folder",
+    "move_local_path": "Moving that",
+    "delete_local_path": "Deleting that",
+}
+
 # Research tools cost live web round-trips: cap them per turn. Every workspace/file
 # tool stays available for the whole turn so the agent can still save its findings.
 # browser_task is excluded from the cap on purpose: it already has its own step
@@ -1101,7 +1124,7 @@ class PeteAgent:
                     "arguments": args
                 }
 
-                yield {"type": "status", "data": f"Running {func_name}..."}
+                yield {"type": "status", "data": f"{TOOL_STATUS_LABELS.get(func_name, func_name)}..."}
                 tool_output = await self.execute_tool(func_name, args, chat)
 
                 if isinstance(tool_output, (dict, list)):

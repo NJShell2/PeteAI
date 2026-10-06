@@ -108,13 +108,60 @@ class BrowserTool:
                     self._browser = None
             return self._browser
 
+    async def _google_search(self, query: str, max_results: int = 5) -> List[Dict[str, str]]:
+        """One best-effort Google HTML search. Returns [] on any block page."""
+        params = {"q": query, "num": max_results * 2, "hl": "en"}
+        headers = {
+            "User-Agent": ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                           "(KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"),
+            "Accept-Language": "en-US,en;q=0.9",
+        }
+        async with httpx.AsyncClient(timeout=12.0, follow_redirects=True,
+                                     headers=headers) as client:
+            resp = await client.get("https://www.google.com/search", params=params)
+        if resp.status_code != 200:
+            return []
+        soup = BeautifulSoup(resp.text, "html.parser")
+        raw: List[Dict[str, str]] = []
+        for g in soup.select("div.g"):
+            link_el = g.select_one("a[href]")
+            title_el = g.select_one("h3")
+            if not link_el or not title_el:
+                continue
+            href = link_el.get("href", "")
+            # Google wraps result links as /url?q=<target>&...
+            if href.startswith("/url?"):
+                href = (parse_qs(urlparse(href).query).get("q") or [""])[0]
+            if not href.startswith("http"):
+                continue
+            snippet_el = g.select_one("div.VwiC3b, div[data-sncf], div.st")
+            raw.append({
+                "title": title_el.get_text(strip=True),
+                "href": href,
+                "body": snippet_el.get_text(" ", strip=True) if snippet_el else "",
+            })
+            if len(raw) >= max_results * 2:
+                break
+        return self._normalize_results(raw, max_results)
+
     async def search_web(self, query: str, max_results: int = 5) -> List[Dict[str, str]]:
-        """Search the web using DuckDuckGo (ddgs library, HTML endpoint fallback).
+        """Search the web: Google first, DuckDuckGo fallback.
+
+        Google serves automated queries a consent or CAPTCHA page often enough
+        that it can never be the only engine -- when it yields nothing usable,
+        DuckDuckGo (ddgs library, then its HTML endpoint) answers instead, so a
+        search never comes back empty just because Google was in a mood.
 
         Ad placements, redirect wrappers, tracking parameters and duplicates are
         filtered out so the agent only ever sees real, citable results.
         """
         results: List[Dict[str, str]] = []
+        try:
+            results = await self._google_search(query, max_results)
+            if results:
+                return results
+        except Exception as e:
+            safe_print(f"Google search error: {e}")
         if HAS_DDGS:
             try:
                 # DDGS is synchronous, so run it in a worker thread.
