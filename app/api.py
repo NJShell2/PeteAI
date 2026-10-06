@@ -8,7 +8,8 @@ from fastapi.responses import StreamingResponse, FileResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-from app.config import load_settings, save_settings, AppSettings, BASE_DIR
+from app.config import load_settings, save_settings, AppSettings, BASE_DIR, DATA_DIR, get_api_key
+from app.key_store import is_protected, protect_api_key
 from app.storage import storage, Message, Chat
 from app.agent import pete_agent
 from app.browser_tool import browser_tool
@@ -75,20 +76,74 @@ class CreateFileRequest(BaseModel):
     content: Optional[str] = ""
 
 # Settings API
+def _public_settings() -> dict:
+    """Settings safe to send to the browser: the API key is never included.
+
+    The frontend learns only whether a key is saved; the key itself is
+    unsealed server-side only at the moment it is used.
+    """
+    settings = load_settings()
+    data = settings.model_dump(exclude={"purdue_api_key"})
+    data["has_api_key"] = bool(get_api_key(settings))
+    return data
+
 @app.get("/api/settings")
 async def get_settings():
-    return load_settings().model_dump()
+    return _public_settings()
 
 @app.post("/api/settings")
 async def update_settings(settings: AppSettings):
+    existing = load_settings()
+    incoming = (settings.purdue_api_key or "").strip()
+    if incoming and not is_protected(incoming):
+        # A fresh key pasted in the UI: seal it before it touches the disk.
+        settings.purdue_api_key = protect_api_key(incoming, DATA_DIR)
+    elif not incoming:
+        # Blank key field means "keep the saved key", not "delete it".
+        settings.purdue_api_key = existing.purdue_api_key
+    # else: an already-sealed blob passed through (not expected from the UI,
+    # but never downgrade it to plaintext).
     save_settings(settings)
-    return {"status": "success", "settings": settings.model_dump()}
+    return {"status": "success", "settings": _public_settings()}
+
+@app.delete("/api/settings/api-key")
+async def forget_api_key():
+    settings = load_settings()
+    settings.purdue_api_key = ""
+    save_settings(settings)
+    return {"status": "success", "settings": _public_settings()}
+
+@app.post("/api/settings/test-connection")
+async def test_connection(payload: Dict[str, Any] = Body(default={})):
+    """Validate a candidate key against Studio WITHOUT saving it.
+
+    Falls back to the saved key when none is supplied. ``strict=True`` on the
+    model listing so a failure is reported honestly instead of being masked by
+    the offline fallback list.
+    """
+    url = payload.get("purdue_api_url") or load_settings().purdue_api_url
+    candidate = (payload.get("purdue_api_key") or "").strip()
+    if candidate and is_protected(candidate):
+        # A sealed blob is not a usable credential; unseal first.
+        candidate = get_api_key(load_settings())
+    key = candidate or get_api_key()
+    if not key:
+        return {"ok": False, "error": "No API key provided and none is saved."}
+    try:
+        models = await llm_client.list_models(api_key=key, base_url=url, strict=True)
+        return {"ok": True, "models": models}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
 
 # Models API
 @app.get("/api/models")
 async def get_models():
-    models = await llm_client.list_models()
-    return {"models": models}
+    try:
+        models = await llm_client.list_models()
+        return {"models": models, "error": None}
+    except RuntimeError as e:
+        # No key configured: say so plainly instead of serving stale fallbacks.
+        return {"models": [], "error": str(e)}
 
 # Chats & Subchats API
 @app.get("/api/chats")
