@@ -318,13 +318,16 @@
           <small style="color: var(--text-muted); font-size: 11px;">OpenAI-compatible endpoint of Purdue Open WebUI</small>
         </div>
         <div class="form-group">
-          <label for="cfgApiKey">Open WebUI API Key</label>
-          <input type="password" id="cfgApiKey" class="form-control" placeholder="Found in Purdue Open WebUI -> Settings -> Account -> API Keys">
-          <small style="color: var(--text-muted); font-size: 11px;">Stored securely in data/settings.json.</small>
+          <label for="cfgApiKey">GenAI Studio API Key</label>
+          <input type="password" id="cfgApiKey" class="form-control" placeholder="Paste your key here">
+          <small style="color: var(--text-muted); font-size: 11px;">Get one at <a href="https://genai.rcac.purdue.edu/" target="_blank" rel="noopener">genai.rcac.purdue.edu</a> (sign in, generate an API key, copy it here). Sealed with encryption for your user account, never stored in plain text. Leave blank to keep the saved key.</small>
         </div>
         <div class="form-group">
           <button class="btn-icon" id="btnTestConnection" style="align-self: flex-start;">
             <i class="fa-solid fa-plug"></i> Test Connection & Fetch Models
+          </button>
+          <button class="btn-icon" id="btnForgetKey" style="align-self: flex-start;" title="Delete the saved API key from this machine">
+            <i class="fa-solid fa-trash"></i> Forget saved key
           </button>
           <span id="connectionStatus" style="font-size: 12px; margin-top: 4px;"></span>
         </div>
