@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pete AI - A Purdue-Powered AI Assistant</title>
+<meta name="description" content="Pete AI is an AI assistant with a memory and a browser, built on Purdue's GenAI Studio models.">
+<style>
+  :root {
+    --gold: #CEB888;
+    --gold-dim: #a8956b;
+    --black: #0b0b0c;
+    --panel: #141416;
+    --panel-2: #1b1b1e;
+    --text: #f2f0ea;
+    --muted: #b9b4a8;
+    --line: #2a2a2e;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--black);
+    color: var(--text);
+    line-height: 1.6;
+  }
+  a { color: var(--gold); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+
+  /* Nav */
+  nav {
+    position: sticky; top: 0; z-index: 50;
+    background: rgba(11,11,12,.94);
+    border-bottom: 1px solid var(--line);
+    backdrop-filter: blur(6px);
+  }
+  .nav-inner {
+    max-width: 1100px; margin: 0 auto; padding: 14px 24px;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .brand { font-weight: 800; font-size: 1.25rem; letter-spacing: .5px; color: var(--text); }
+  .brand span { color: var(--gold); }
+  .nav-links { display: flex; gap: 22px; font-size: .95rem; }
+  .nav-links a { color: var(--muted); }
+  .nav-links a:hover { color: var(--gold); text-decoration: none; }
+  @media (max-width: 640px) { .nav-links { display: none; } }
+
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 0 24px; }
+
+  /* Hero */
+  .hero { padding: 96px 0 72px; text-align: center; }
+  .kicker {
+    display: inline-block; font-size: .8rem; letter-spacing: 2px; text-transform: uppercase;
+    color: var(--gold); border: 1px solid var(--gold-dim); border-radius: 999px;
+    padding: 6px 16px; margin-bottom: 24px;
+  }
+  .hero h1 { font-size: clamp(2.6rem, 6vw, 4.2rem); line-height: 1.08; letter-spacing: -1px; margin-bottom: 18px; }
+  .hero h1 .gold { color: var(--gold); }
+  .hero p.lede { font-size: 1.2rem; color: var(--muted); max-width: 680px; margin: 0 auto 32px; }
+  .cta-row { display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; }
+  .btn {
+    display: inline-block; padding: 13px 28px; border-radius: 8px; font-weight: 700; font-size: 1rem;
+  }
+  .btn-gold { background: var(--gold); color: #111; }
+  .btn-gold:hover { background: #dcc79a; text-decoration: none; }
+  .btn-ghost { border: 1px solid var(--line); color: var(--text); background: var(--panel); }
+  .btn-ghost:hover { border-color: var(--gold-dim); text-decoration: none; }
+
+  /* Sections */
+  section { padding: 64px 0; border-top: 1px solid var(--line); }
+  section h2 { font-size: 1.9rem; margin-bottom: 8px; letter-spacing: -.5px; }
+  section h2 .gold { color: var(--gold); }
+  .section-sub { color: var(--muted); max-width: 720px; margin-bottom: 32px; }
+
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 18px; }
+  .card {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 26px;
+  }
+  .card:hover { border-color: var(--gold-dim); }
+  .card .icon { font-size: 1.6rem; margin-bottom: 10px; }
+  .card h3 { font-size: 1.1rem; margin-bottom: 8px; color: var(--gold); }
+  .card p { color: var(--muted); font-size: .96rem; }
+
+  .two-col { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 18px; }
+  .mode-card {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 30px;
+  }
+  .mode-card.solo { border-top: 3px solid var(--gold); }
+  .mode-card.squad { border-top: 3px solid #6b7280; }
+  .mode-card h3 { font-size: 1.35rem; margin-bottom: 6px; }
+  .mode-card .tag {
+    display: inline-block; font-size: .75rem; font-weight: 700; letter-spacing: 1px; text-transform: uppercase;
+    border-radius: 4px; padding: 3px 10px; margin-bottom: 14px;
+  }
+  .mode-card.solo .tag { background: rgba(206,184,136,.15); color: var(--gold); }
+  .mode-card.squad .tag { background: rgba(107,114,128,.2); color: #9ca3af; }
+  .mode-card ul { list-style: none; margin-top: 12px; }
+  .mode-card li { color: var(--muted); font-size: .95rem; padding: 6px 0 6px 26px; position: relative; }
+  .mode-card li::before { content: "✓"; position: absolute; left: 0; color: var(--gold); font-weight: 700; }
+  .mode-card.squad li::before { content: "→"; color: #9ca3af; }
+
+  /* Steps */
+  .steps { counter-reset: step; display: grid; gap: 14px; max-width: 760px; }
+  .step {
+    counter-increment: step; background: var(--panel); border: 1px solid var(--line);
+    border-radius: 12px; padding: 20px 22px 20px 70px; position: relative;
+  }
+  .step::before {
+    content: counter(step); position: absolute; left: 22px; top: 18px;
+    width: 32px; height: 32px; border-radius: 50%; background: var(--gold); color: #111;
+    font-weight: 800; display: flex; align-items: center; justify-content: center;
+  }
+  .step h4 { margin-bottom: 4px; font-size: 1.02rem; }
+  .step p { color: var(--muted); font-size: .95rem; }
+  .step code {
+    background: var(--panel-2); border: 1px solid var(--line); border-radius: 6px;
+    padding: 2px 8px; font-size: .88rem; color: var(--gold);
+  }
+
+  .note {
+    background: rgba(206,184,136,.07); border: 1px solid var(--gold-dim); border-radius: 12px;
+    padding: 22px 24px; max-width: 760px; margin-top: 22px;
+  }
+  .note h4 { color: var(--gold); margin-bottom: 8px; }
+  .note p, .note li { color: var(--muted); font-size: .95rem; }
+  .note ul { margin: 8px 0 0 20px; }
+
+  .status-list { list-style: none; max-width: 760px; display: grid; gap: 12px; }
+  .status-list li {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+    padding: 16px 20px; color: var(--muted); font-size: .96rem;
+  }
+  .status-list li strong { color: var(--text); }
+  .pill {
+    display: inline-block; font-size: .72rem; font-weight: 800; letter-spacing: 1px;
+    text-transform: uppercase; border-radius: 4px; padding: 3px 10px; margin-right: 10px;
+  }
+  .pill.done { background: rgba(74,222,128,.14); color: #4ade80; }
+  .pill.wip { background: rgba(206,184,136,.15); color: var(--gold); }
+  .pill.next { background: rgba(107,114,128,.2); color: #9ca3af; }
+
+  footer {
+    border-top: 1px solid var(--line); padding: 36px 0; text-align: center; color: var(--muted);
+    font-size: .9rem;
+  }
+  footer .gold { color: var(--gold); font-weight: 700; }
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="nav-inner">
+    <div class="brand">Pete <span>AI</span></div>
+    <div class="nav-links">
+      <a href="#modes">Modes</a>
+      <a href="#features">Features</a>
+      <a href="#api-key">API Key</a>
+      <a href="#run">Run it</a>
+      <a href="#roadmap">Roadmap</a>
+      <a href="#status">Status</a>
+    </div>
+  </div>
+</nav>
+
+<div class="wrap">
+
+  <header class="hero">
+    <div class="kicker">Built on Purdue GenAI Studio</div>
+    <h1>An AI assistant with<br>a <span class="gold">memory</span> and a <span class="gold">browser</span>.</h1>
+    <p class="lede">Pete AI brings the agentic assistant experience, persistent storage and real browser use, to Purdue's own GenAI Studio models. Chat that remembers. Files that persist. An agent that can actually go read the web.</p>
+    <div class="cta-row">
+      <a class="btn btn-gold" href="#api-key">Get started with your API key</a>
+      <a class="btn btn-ghost" href="#features">See how it works</a>
+    </div>
+  </header>
+
+  <section id="modes">
+    <h2>Two modes, <span class="gold">one Pete</span></h2>
+    <p class="section-sub">Start simple with a single agent. Grow into a coordinated team when the job gets big.</p>
+    <div class="two-col">
+      <div class="mode-card solo">
+        <div class="tag">Working today</div>
+        <h3>Pete Solo</h3>
+        <p style="color:var(--muted); font-size:.96rem;">One agent with everything it needs: conversation, a persistent file workspace, and browser tools. The daily driver.</p>
+        <ul>
+          <li>Chat with full history, saved between sessions</li>
+          <li>Workspace files: read, write, and organize documents</li>
+          <li>Browser agent that researches live pages with citations</li>
+          <li>You watch and can take control at any moment</li>
+        </ul>
+      </div>
+      <div class="mode-card squad">
+        <div class="tag">On the roadmap</div>
+        <h3>Pete Squad</h3>
+        <p style="color:var(--muted); font-size:.96rem;">A coordinated team for complex jobs: an orchestrator breaks the goal apart, specialists work in parallel, and a critic verifies before anything reaches you.</p>
+        <ul>
+          <li>Orchestrator decomposes goals and delegates subtasks</li>
+          <li>Researcher works the browser while the Coder works the files</li>
+          <li>Agents message each other instead of routing through you</li>
+          <li>Critic validates code and facts before the final answer</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section id="features">
+    <h2>What makes Pete <span class="gold">different</span></h2>
+    <p class="section-sub">Inspired by my personal Muse assistant (I named my Muse Barry the Bot), rebuilt from the ground up on Purdue infrastructure. The focus is on trust: your key stays yours, your data stays local, and you always hold the wheel.</p>
+    <div class="cards">
+      <div class="card">
+        <div class="icon">🔑</div>
+        <h3>Your key, remembered</h3>
+        <p>First-run setup walks you through getting a GenAI Studio key. Paste it once, Pete AI encrypts it for your Windows user account, and you never enter it again. A connection test proves it works before you start.</p>
+      </div>
+      <div class="card">
+        <div class="icon">💾</div>
+        <h3>Local-first memory</h3>
+        <p>Chats and workspace files live on your machine as the source of truth. The app keeps working during network outages, and nothing is uploaded anywhere unless you opt in.</p>
+      </div>
+      <div class="card">
+        <div class="icon">🌐</div>
+        <h3>A browser it can actually use</h3>
+        <p>Pete drives a real browser to research, read pages, and gather sources, with a live view so you can watch every step. It reports what it found with direct citations.</p>
+      </div>
+      <div class="card">
+        <div class="icon">🎛️</div>
+        <h3>You are always in charge</h3>
+        <p>Focus mode puts the browser front and center. Take control with one button, hand it back with Esc, and stop any run with a Stop button that never breaks the next run.</p>
+      </div>
+      <div class="card">
+        <div class="icon">📅</div>
+        <h3>Knows what today is</h3>
+        <p>The real date and local time are supplied to the model on every request, so "today", "tomorrow", and "latest" mean what they should, even for models with older training data.</p>
+      </div>
+      <div class="card">
+        <div class="icon">✅</div>
+        <h3>Verified, not vibes</h3>
+        <p>Seven automated test suites guard the browser launch, the agent loop, the stop behavior, chat persistence, and the takeover UX, all measured against a real browser.</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="api-key">
+    <h2>Your <span class="gold">API key</span></h2>
+    <p class="section-sub">Pete AI talks to Purdue's GenAI Studio, and Studio needs to know who is asking. That is what your personal API key is for. You get it once, paste it once, and Pete AI remembers it from then on.</p>
+    <div class="steps">
+      <div class="step">
+        <h4>Go to Purdue GenAI Studio</h4>
+        <p>Visit <a href="https://genai.rcac.purdue.edu/">genai.rcac.purdue.edu</a> and sign in with your Purdue account.</p>
+      </div>
+      <div class="step">
+        <h4>Create your API key</h4>
+        <p>Generate an API key in Studio and copy it. Treat it like a password: it identifies you, and anyone holding it can use Studio as you. You may only be shown the key once, so copy it now.</p>
+      </div>
+      <div class="step">
+        <h4>Launch Pete AI</h4>
+        <p>On first run, a setup modal appears automatically with these same instructions and a link back to Studio, so nobody has to guess where the key comes from.</p>
+      </div>
+      <div class="step">
+        <h4>Paste the key and test the connection</h4>
+        <p>Paste your key into the setup modal and run the built-in connection test. It verifies the key against Studio live, so you know it works before you start chatting.</p>
+      </div>
+      <div class="step">
+        <h4>Done, it is remembered</h4>
+        <p>Pete AI encrypts your key with Windows DPAPI, tied to your logged-in Windows account, and stores it in your per-user app data at <code>%LOCALAPPDATA%\PurduePeteAI</code>. A copy of that file is useless on another machine or another user account. You never reenter the key.</p>
+      </div>
+    </div>
+    <div class="note">
+      <h4>Key hygiene, non-negotiable</h4>
+      <ul>
+        <li>Keys are per person. On a shared machine, each user enters their own key once.</li>
+        <li>Never paste your key into chat, email, or a shared document.</li>
+        <li>If a key is ever exposed, revoke it and generate a new one at genai.rcac.purdue.edu. Deleting a copied key is hygiene, not remediation: only rotation invalidates a key someone else may already hold.</li>
+        <li>No key ever ships with Pete AI. Builds are assembled with an empty key store by design.</li>
+      </ul>
+    </div>
+  </section>
+
+  <section id="run">
+    <h2>Run it <span class="gold">yourself</span></h2>
+    <p class="section-sub">Pete AI runs on your own Windows machine, and your API key never leaves it. Grab the source, launch it, paste your key once.</p>
+    <div class="steps">
+      <div class="step">
+        <h4>Get the source</h4>
+        <p>Clone or download the repo at <a href="https://github.com/NJShell2/PeteAI">github.com/NJShell2/PeteAI</a>.</p>
+      </div>
+      <div class="step">
+        <h4>Install the dependencies</h4>
+        <p>With Python 3.12 installed: <code>pip install -r requirements.txt</code>. Pete AI finds your installed Chrome or Edge automatically; otherwise run <code>playwright install chromium</code>.</p>
+      </div>
+      <div class="step">
+        <h4>Launch it</h4>
+        <p>Run <code>run.bat</code>, then open <code>http://127.0.0.1:8000</code> in your browser.</p>
+      </div>
+      <div class="step">
+        <h4>Paste your key once</h4>
+        <p>The first-run setup modal appears with instructions for getting your GenAI Studio key. Paste it, run the connection test, and Pete AI encrypts and remembers it from then on.</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="roadmap">
+    <h2>The <span class="gold">roadmap</span></h2>
+    <p class="section-sub">Where Pete AI goes next. Designed deliberately, built in order, no shortcuts.</p>
+    <div class="cards">
+      <div class="card">
+        <div class="icon">👥</div>
+        <h3>Pete Squad, for real</h3>
+        <p>Parallel browser agents with per-agent screens, agent-to-agent messaging, and an orchestrator that delegates and synthesizes. The architecture is designed; the build is next.</p>
+      </div>
+      <div class="card">
+        <div class="icon">☁️</div>
+        <h3>Optional cloud sync</h3>
+        <p>Opt-in sync of chat history through GenAI Studio, so a conversation can follow you between machines. Local-first stays the default; sync is a choice, not a requirement.</p>
+      </div>
+      <div class="card">
+        <div class="icon">📧</div>
+        <h3>Outlook, calendar, Teams</h3>
+        <p>Long-term aspiration: reach Microsoft 365 through the Graph API, not the browser. Read-only first, human confirmation before any write, and only within whatever Purdue IT permits. Authentication is the real work here, and it gets decided before a line of integration code.</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="status">
+    <h2>Project <span class="gold">status</span></h2>
+    <p class="section-sub">Prototype stage. Working software, honest labels.</p>
+    <ul class="status-list">
+      <li><span class="pill done">Done</span><strong>Pete Solo:</strong> chat with persistent history, file workspace, and a browser agent that reaches real pages.</li>
+      <li><span class="pill done">Done</span><strong>Human-in-the-loop browser UX:</strong> focus mode, take control, Esc handoffs, and a stop button that stops one run without killing the next. Verified in a real browser.</li>
+      <li><span class="pill done">Done</span><strong>Secure per-user key storage:</strong> first-run setup modal, live connection test, DPAPI-encrypted storage. No plaintext keys anywhere in the app.</li>
+      <li><span class="pill wip">In progress</span><strong>Packaged build:</strong> portable Windows build in progress so anyone can run Pete AI without a Python toolchain.</li>
+      <li><span class="pill next">Next</span><strong>Pete Squad:</strong> multi-agent architecture designed and documented; implementation is the next milestone.</li>
+    </ul>
+  </section>
+
+</div>
+
+<footer>
+  <div class="wrap">
+    <p><span class="gold">Pete AI</span> · Built by Nicholas Shell · A personal project exploring agentic AI on Purdue infrastructure.</p>
+    <p style="margin-top:8px;">Pete AI connects only to Purdue GenAI Studio. No key ever ships with the app.</p>
+  </div>
+</footer>
+
+</body>
+</html>
