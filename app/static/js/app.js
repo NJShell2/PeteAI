@@ -114,16 +114,34 @@ const btnToggleFocusMode = document.getElementById("btnToggleFocusMode");
 const browserElementList = document.getElementById("browserElementList");
 const browserElementsCount = document.getElementById("browserElementsCount");
 
-// Initialize Marked.js
-marked.setOptions({
-  highlight: function(code, lang) {
-    if (lang && hljs.getLanguage(lang)) {
-      return hljs.highlight(code, { language: lang }).value;
+// Initialize Marked.js. Guarded: if the script failed to load for any reason,
+// fall back to plain-text rendering instead of crashing the whole app at
+// startup (a single failed <script> must never kill Pete).
+if (typeof marked !== "undefined") {
+  marked.setOptions({
+    highlight: function(code, lang) {
+      try {
+        if (typeof hljs !== "undefined") {
+          if (lang && hljs.getLanguage(lang)) {
+            return hljs.highlight(code, { language: lang }).value;
+          }
+          return hljs.highlightAuto(code).value;
+        }
+      } catch (e) { /* highlighting is decorative; never break rendering */ }
+      return code;
+    },
+    breaks: true
+  });
+} else {
+  window.marked = {
+    parse: function(src) {
+      return String(src || "")
+        .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+        .replace(/\n/g, "<br>");
     }
-    return hljs.highlightAuto(code).value;
-  },
-  breaks: true
-});
+  };
+  console.warn("marked.js unavailable; using plain-text fallback");
+}
 
 // App Startup
 document.addEventListener("DOMContentLoaded", async () => {
