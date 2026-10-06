@@ -50,6 +50,7 @@ const btnCloseSettings = document.getElementById("btnCloseSettings");
 const btnCancelSettings = document.getElementById("btnCancelSettings");
 const btnSaveSettings = document.getElementById("btnSaveSettings");
 const btnTestConnection = document.getElementById("btnTestConnection");
+const btnForgetKey = document.getElementById("btnForgetKey");
 const cfgApiUrl = document.getElementById("cfgApiUrl");
 const cfgApiKey = document.getElementById("cfgApiKey");
 const cfgDefaultModel = document.getElementById("cfgDefaultModel");
@@ -131,6 +132,12 @@ document.addEventListener("DOMContentLoaded", async () => {
   await loadChatList();
   setupEventListeners();
 
+  // First-run experience: no key saved yet, so open Settings immediately with
+  // the key instructions front and center instead of failing later.
+  if (appSettings && !appSettings.has_api_key) {
+    settingsModal.style.display = "flex";
+  }
+
   if (!currentChatId) {
     await createNewChat("Welcome to Pete AI");
   }
@@ -163,38 +170,65 @@ async function apiPut(endpoint, body) {
   return await res.json();
 }
 
+async function apiDelete(endpoint) {
+  const res = await fetch(endpoint, { method: "DELETE" });
+  if (!res.ok) throw new Error(await res.text());
+  return await res.json();
+}
+
 // --- Settings Management ---
 async function loadSettings() {
   try {
     appSettings = await apiGet("/api/settings");
     cfgApiUrl.value = appSettings.purdue_api_url;
-    cfgApiKey.value = appSettings.purdue_api_key;
+    // The key itself is never sent to the browser; show only whether one is saved.
+    cfgApiKey.value = "";
+    cfgApiKey.placeholder = appSettings.has_api_key
+      ? "Key saved — leave blank to keep it, or paste a new one"
+      : "Paste your GenAI Studio API key";
     cfgSystemPrompt.value = appSettings.system_prompt;
   } catch (e) {
     console.error("Failed to load settings:", e);
   }
 }
 
+function renderModelOptions() {
+  modelSelector.innerHTML = "";
+  cfgDefaultModel.innerHTML = "";
+  availableModels.forEach(m => {
+    const opt = document.createElement("option");
+    opt.value = m.id;
+    opt.textContent = m.name;
+    modelSelector.appendChild(opt.cloneNode(true));
+    cfgDefaultModel.appendChild(opt);
+  });
+  if (appSettings && appSettings.default_model) {
+    modelSelector.value = appSettings.default_model;
+    cfgDefaultModel.value = appSettings.default_model;
+  }
+}
+
 async function loadModels() {
   try {
     const data = await apiGet("/api/models");
-    availableModels = data.models || [];
-    
-    modelSelector.innerHTML = "";
-    cfgDefaultModel.innerHTML = "";
-    
-    availableModels.forEach(m => {
-      const opt = document.createElement("option");
-      opt.value = m.id;
-      opt.textContent = m.name;
-      modelSelector.appendChild(opt.cloneNode(true));
-      cfgDefaultModel.appendChild(opt);
-    });
-
-    if (appSettings && appSettings.default_model) {
-      modelSelector.value = appSettings.default_model;
-      cfgDefaultModel.value = appSettings.default_model;
+    if (data.error) {
+      // No API key (or another model-service problem): say so in the pickers
+      // instead of silently showing a stale list.
+      availableModels = [];
+      const msg = "No API key — open Settings";
+      modelSelector.innerHTML = "";
+      cfgDefaultModel.innerHTML = "";
+      [modelSelector, cfgDefaultModel].forEach(sel => {
+        const opt = document.createElement("option");
+        opt.value = "";
+        opt.textContent = msg;
+        sel.appendChild(opt);
+      });
+      console.warn("Models unavailable:", data.error);
+      return;
     }
+    availableModels = data.models || [];
+    renderModelOptions();
   } catch (e) {
     console.error("Failed to load models:", e);
   }
@@ -1058,16 +1092,34 @@ function setupEventListeners() {
   btnTestConnection.addEventListener("click", async () => {
     connectionStatus.innerHTML = `<span style="color: var(--purdue-gold);"><i class="fa-solid fa-spinner fa-spin"></i> Testing Purdue RCAC connection...</span>`;
     try {
-      await apiPost("/api/settings", {
+      // Tests the candidate key WITHOUT saving it; Save Settings persists it.
+      const res = await apiPost("/api/settings/test-connection", {
         purdue_api_url: cfgApiUrl.value,
-        purdue_api_key: cfgApiKey.value,
-        default_model: cfgDefaultModel.value,
-        system_prompt: cfgSystemPrompt.value
+        purdue_api_key: cfgApiKey.value
       });
-      await loadModels();
-      connectionStatus.innerHTML = `<span style="color: var(--accent-green);"><i class="fa-solid fa-check"></i> Connected! Fetched ${availableModels.length} models.</span>`;
+      if (res.ok) {
+        availableModels = res.models || [];
+        renderModelOptions();
+        const n = availableModels.length;
+        connectionStatus.innerHTML = `<span style="color: var(--accent-green);"><i class="fa-solid fa-check"></i> Connected! Fetched ${n} model${n === 1 ? "" : "s"}. Press Save Settings to keep this key.</span>`;
+      } else {
+        connectionStatus.innerHTML = `<span style="color: var(--accent-red);"><i class="fa-solid fa-xmark"></i> Connection failed: ${escapeHtml(res.error || "unknown error")}</span>`;
+      }
     } catch (e) {
       connectionStatus.innerHTML = `<span style="color: var(--accent-red);"><i class="fa-solid fa-xmark"></i> Connection failed: ${escapeHtml(e.message)}</span>`;
+    }
+  });
+
+  btnForgetKey.addEventListener("click", async () => {
+    if (!confirm("Delete the saved API key from this machine?")) return;
+    try {
+      await apiDelete("/api/settings/api-key");
+      cfgApiKey.value = "";
+      await loadSettings();
+      await loadModels();
+      connectionStatus.innerHTML = `<span style="color: var(--accent-green);"><i class="fa-solid fa-check"></i> Saved key removed.</span>`;
+    } catch (e) {
+      connectionStatus.innerHTML = `<span style="color: var(--accent-red);"><i class="fa-solid fa-xmark"></i> Could not remove key: ${escapeHtml(e.message)}</span>`;
     }
   });
 
