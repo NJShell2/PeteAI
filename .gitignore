@@ -1,0 +1,17 @@
+# never commit secrets or per-machine state
+.env
+data/
+*.bak.md
+
+# python
+__pycache__/
+*.py[cod]
+.venv/
+*.egg-info/
+
+# pyinstaller build output
+dist/
+build/
+_internal/
+Engine/
+*.spec.bak
