@@ -11,6 +11,7 @@ from dotenv import load_dotenv
 # the first app module every entrypoint imports, so this is the earliest safe
 # place to do it.
 from app.console import configure_stdio, safe_print
+from app.key_store import is_protected, protect_api_key, unprotect_api_key
 
 configure_stdio()
 
@@ -184,7 +185,14 @@ def load_settings() -> AppSettings:
                 data = json.load(f)
             data, migrated = _migrate_settings(data)
             settings = AppSettings(**data)
-            if migrated:
+            # One-time upgrade: a key saved as legacy plaintext gets sealed for
+            # the current user/machine and re-saved. Never stored in the clear.
+            blob = settings.purdue_api_key or ""
+            if blob and not is_protected(blob):
+                settings.purdue_api_key = protect_api_key(blob, DATA_DIR)
+                save_settings(settings)
+                migrated = True
+            elif migrated:
                 save_settings(settings)  # persist the upgrade so legacy values stop coming back
             return settings
         except Exception as e:
@@ -195,8 +203,25 @@ def load_settings() -> AppSettings:
         purdue_api_key=os.getenv("PURDUE_API_KEY", ""),
         default_model=os.getenv("DEFAULT_MODEL", defaults.default_model)
     )
+    if settings.purdue_api_key and not is_protected(settings.purdue_api_key):
+        settings.purdue_api_key = protect_api_key(settings.purdue_api_key, DATA_DIR)
     save_settings(settings)
     return settings
+
+
+def get_api_key(settings: "AppSettings | None" = None) -> str:
+    """The usable API key, unsealed. Returns "" when none is configured.
+
+    ``AppSettings.purdue_api_key`` on disk is always the sealed blob (or a
+    legacy plaintext value awaiting migration); never use it directly.
+    """
+    s = settings or load_settings()
+    blob = s.purdue_api_key or ""
+    if not blob:
+        return ""
+    if is_protected(blob):
+        return unprotect_api_key(blob, DATA_DIR)
+    return blob
 
 
 def save_settings(settings: AppSettings):
