@@ -1,4 +1,6 @@
 import json
+import secrets
+import time
 import asyncio
 from pathlib import Path
 from typing import Optional, List, Dict, Any
@@ -134,6 +136,93 @@ async def test_connection(payload: Dict[str, Any] = Body(default={})):
         return {"ok": True, "models": models}
     except Exception as e:
         return {"ok": False, "error": str(e)}
+
+# Microsoft Graph connector (Outlook, Teams, Calendar) ---------------------------
+# Device-code flow: the user opens microsoft.com/devicelogin on any device and
+# types the short code. No redirect URI, no localhost callback -- the easiest
+# setup that is still real OAuth.
+
+# Pending device flows, kept server-side: the browser only ever sees the
+# user-facing code, never the device_code credential. Entries expire.
+_graph_pending: Dict[str, Dict[str, Any]] = {}
+
+
+def _prune_graph_pending() -> None:
+    now = time.time()
+    for sid in [k for k, v in _graph_pending.items()
+                if now - v.get("started", 0) > 15 * 60]:
+        _graph_pending.pop(sid, None)
+
+
+@app.get("/api/graph/status")
+async def graph_status():
+    from app import graph_auth
+    from app.config import DATA_DIR
+    settings = load_settings()
+    status = graph_auth.connection_status(DATA_DIR)
+    status["has_client_id"] = bool((settings.graph_client_id or "").strip())
+    return status
+
+
+@app.post("/api/graph/connect")
+async def graph_connect():
+    """Starts the device-code flow. Returns the code the user types at microsoft.com/devicelogin."""
+    from app import graph_auth
+    settings = load_settings()
+    try:
+        flow = await graph_auth.start_device_flow(
+            settings.graph_client_id, settings.graph_tenant or "common")
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Could not reach Microsoft: {e}")
+    _prune_graph_pending()
+    session_id = secrets.token_urlsafe(16)
+    _graph_pending[session_id] = {
+        "device_code": flow["device_code"],
+        "started": time.time(),
+    }
+    return {
+        "session_id": session_id,
+        "user_code": flow["user_code"],
+        "verification_uri": flow["verification_uri"],
+        "message": flow["message"],
+        "interval": flow["interval"],
+    }
+
+
+@app.post("/api/graph/poll")
+async def graph_poll(payload: Dict[str, Any] = Body(default={})):
+    """Polls once for the device-code approval. The UI calls this every few seconds."""
+    from app import graph_auth
+    from app.config import DATA_DIR
+    from app.graph_auth import AuthorizationPending
+    settings = load_settings()
+    _prune_graph_pending()
+    session_id = (payload.get("session_id") or "").strip()
+    pending = _graph_pending.get(session_id)
+    if not pending:
+        raise HTTPException(status_code=400, detail="Sign-in expired. Start over with Connect.")
+    try:
+        tokens = await graph_auth.poll_device_flow(
+            settings.graph_client_id, pending["device_code"],
+            settings.graph_tenant or "common")
+    except AuthorizationPending:
+        return {"status": "pending"}
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=str(e))
+    graph_auth.save_tokens(DATA_DIR, tokens)
+    _graph_pending.pop(session_id, None)
+    return {"status": "done", **graph_auth.connection_status(DATA_DIR)}
+
+
+@app.post("/api/graph/disconnect")
+async def graph_disconnect():
+    from app import graph_auth
+    from app.config import DATA_DIR
+    graph_auth.disconnect(DATA_DIR)
+    return {"status": "success", "connected": False}
+
 
 # Models API
 @app.get("/api/models")

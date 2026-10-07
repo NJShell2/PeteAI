@@ -308,7 +308,7 @@
   <div class="modal-overlay" id="settingsModal">
     <div class="modal-content">
       <div class="modal-header">
-        <h3 style="font-size: 16px;"><i class="fa-solid fa-sliders"></i> Purdue GenAI Studio Settings</h3>
+        <h3 style="font-size: 16px;"><i class="fa-solid fa-sliders"></i> Settings</h3>
         <button class="btn-icon" id="btnCloseSettings">✕</button>
       </div>
       <div class="modal-body">
@@ -340,6 +340,40 @@
         <div class="form-group">
           <label for="cfgSystemPrompt">System Prompt</label>
           <textarea id="cfgSystemPrompt" class="form-control" rows="3"></textarea>
+        </div>
+        <div class="form-group" style="border-top: 1px solid var(--border); padding-top: 12px; margin-top: 4px;">
+          <label style="font-weight: 600;"><i class="fa-brands fa-microsoft"></i> Microsoft 365 (Outlook, Teams, Calendar)</label>
+          <small style="color: var(--text-muted); font-size: 11px; display: block; margin-bottom: 8px;">
+            Optional. Connects Pete to your Outlook mail, Teams chats, and calendar through Microsoft Graph.
+            Tokens are encrypted for your Windows account, like the API key.
+          </small>
+          <div id="graphStatusLine" style="font-size: 12px; margin-bottom: 8px;">Checking Microsoft status...</div>
+          <label for="cfgGraphClientId" style="font-size: 12px;">Application (client) ID</label>
+          <input type="text" id="cfgGraphClientId" class="form-control" placeholder="Paste your Azure app's client ID">
+          <label for="cfgGraphTenant" style="font-size: 12px; margin-top: 6px;">Tenant (optional)</label>
+          <input type="text" id="cfgGraphTenant" class="form-control" placeholder="common" style="max-width: 220px;">
+          <details style="font-size: 11px; color: var(--text-muted); margin: 6px 0;">
+            <summary style="cursor: pointer;">How to get a client ID</summary>
+            <ol style="margin: 6px 0 0 18px; padding: 0;">
+              <li>Go to <a href="https://portal.azure.com/#view/Microsoft_AAD_RegisteredApps/ApplicationsListBlade" target="_blank" rel="noopener">Azure App registrations</a> and create a <strong>New registration</strong>.</li>
+              <li>Name it PeteAI. Supported account types: <em>Accounts in any organizational directory and personal Microsoft accounts</em>. No redirect URI needed.</li>
+              <li>Open it, go to <strong>Authentication</strong>, and enable <strong>Allow public client flows</strong>.</li>
+              <li>Copy the <strong>Application (client) ID</strong> from its Overview page and paste it above, then Save Settings.</li>
+            </ol>
+          </details>
+          <div style="display: flex; gap: 8px; align-items: center; margin-top: 6px;">
+            <button class="btn-icon" id="btnGraphConnect" style="align-self: flex-start;">
+              <i class="fa-brands fa-microsoft"></i> Connect Microsoft
+            </button>
+            <button class="btn-icon" id="btnGraphDisconnect" style="align-self: flex-start; display: none;" title="Sign out of Microsoft on this machine">
+              <i class="fa-solid fa-plug-circle-xmark"></i> Disconnect
+            </button>
+          </div>
+          <div id="graphCodeBox" style="display: none; margin-top: 8px; padding: 10px; border: 1px dashed var(--purdue-gold); border-radius: 6px; font-size: 13px;">
+            <div>Go to <a id="graphVerifyLink" href="https://microsoft.com/devicelogin" target="_blank" rel="noopener">microsoft.com/devicelogin</a> and enter this code:</div>
+            <div id="graphUserCode" style="font-size: 26px; font-weight: 700; letter-spacing: 3px; margin: 6px 0;"></div>
+            <div id="graphPollStatus" style="font-size: 12px; color: var(--text-muted);">Waiting for you to approve...</div>
+          </div>
         </div>
       </div>
       <div class="modal-footer">

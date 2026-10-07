@@ -74,6 +74,84 @@ PETE_TOOLS = [
     {
         "type": "function",
         "function": {
+            "name": "read_email",
+            "description": "Read the newest emails in the Outlook inbox. Requires the Microsoft connector (Settings).",
+            "parameters": {"type": "object", "properties": {
+                "count": {"type": "integer", "description": "How many messages, 1-25. Default 10."}
+            }}
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "search_email",
+            "description": "Search Outlook mail by keywords. Requires the Microsoft connector (Settings).",
+            "parameters": {"type": "object", "properties": {
+                "query": {"type": "string", "description": "Keywords to search for."},
+                "count": {"type": "integer", "description": "How many messages, 1-25. Default 10."}
+            }, "required": ["query"]}
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "send_email",
+            "description": "Send an email from the connected Outlook account. Only when the user explicitly asks to send something.",
+            "parameters": {"type": "object", "properties": {
+                "to": {"type": "string", "description": "Recipient address(es), comma-separated."},
+                "subject": {"type": "string", "description": "Subject line."},
+                "body": {"type": "string", "description": "Plain-text body."}
+            }, "required": ["to", "subject", "body"]}
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "list_calendar_events",
+            "description": "List upcoming Outlook calendar events. Requires the Microsoft connector (Settings).",
+            "parameters": {"type": "object", "properties": {
+                "days": {"type": "integer", "description": "How many days ahead, 1-60. Default 7."}
+            }}
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "create_calendar_event",
+            "description": "Create an Outlook calendar event. Times like 2026-10-08T14:00.",
+            "parameters": {"type": "object", "properties": {
+                "subject": {"type": "string"},
+                "start": {"type": "string", "description": "Start, e.g. 2026-10-08T14:00."},
+                "end": {"type": "string", "description": "End, e.g. 2026-10-08T15:00."},
+                "attendees": {"type": "string", "description": "Email(s), comma-separated. Optional."},
+                "location": {"type": "string", "description": "Optional."}
+            }, "required": ["subject", "start", "end"]}
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "list_teams_chats",
+            "description": "List recent Microsoft Teams chats (1:1 and group). Requires the Microsoft connector (Settings).",
+            "parameters": {"type": "object", "properties": {
+                "count": {"type": "integer", "description": "How many chats, 1-30. Default 15."}
+            }}
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "send_teams_message",
+            "description": "Send a message to a Teams chat. List chats first for the id. Only when the user explicitly asks.",
+            "parameters": {"type": "object", "properties": {
+                "chat_id": {"type": "string", "description": "The Teams chat id."},
+                "message": {"type": "string", "description": "Message text."}
+            }, "required": ["chat_id", "message"]}
+        }
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "take_screenshot",
             "description": "Capture a visual screenshot of a webpage and save it directly into the chat workspace for the user.",
             "parameters": {
@@ -404,6 +482,9 @@ KNOWN_TOOL_NAMES = {
     "write_workspace_file", "spawn_subchat",
     "list_local_dir", "read_local_file", "search_files",
     "write_local_file", "create_local_dir", "move_local_path", "delete_local_path",
+    "read_email", "search_email", "send_email",
+    "list_calendar_events", "create_calendar_event",
+    "list_teams_chats", "send_teams_message",
 }
 
 # What the chat shows while a tool runs. Plain words, never raw tool names --
@@ -427,6 +508,13 @@ TOOL_STATUS_LABELS = {
     "create_local_dir": "Creating that folder",
     "move_local_path": "Moving that",
     "delete_local_path": "Deleting that",
+    "read_email": "Reading email",
+    "search_email": "Searching email",
+    "send_email": "Sending email",
+    "list_calendar_events": "Checking the calendar",
+    "create_calendar_event": "Creating a calendar event",
+    "list_teams_chats": "Listing Teams chats",
+    "send_teams_message": "Sending a Teams message",
 }
 
 # Research tools cost live web round-trips: cap them per turn. Every workspace/file
@@ -779,6 +867,40 @@ class PeteAgent:
                 elif event.get("type") == "error":
                     return {"error": event.get("error", "Browser agent failed."), "url": None}
             return answer or "The browser agent finished without producing an answer."
+
+        elif name in ("read_email", "search_email", "send_email",
+                         "list_calendar_events", "create_calendar_event",
+                         "list_teams_chats", "send_teams_message"):
+            from app import graph_tools as _gt
+            from app.config import DATA_DIR
+            _settings = load_settings()
+            _cid, _tenant = _settings.graph_client_id, _settings.graph_tenant or "common"
+            if name == "read_email":
+                return await _gt.read_email(DATA_DIR, _cid, _tenant,
+                                            int(args.get("count") or 10))
+            if name == "search_email":
+                return await _gt.search_email(DATA_DIR, _cid, _tenant,
+                                              args.get("query", ""),
+                                              int(args.get("count") or 10))
+            if name == "send_email":
+                return await _gt.send_email(DATA_DIR, _cid, _tenant,
+                                            args.get("to", ""), args.get("subject", ""),
+                                            args.get("body", ""))
+            if name == "list_calendar_events":
+                return await _gt.list_calendar_events(DATA_DIR, _cid, _tenant,
+                                                      int(args.get("days") or 7))
+            if name == "create_calendar_event":
+                return await _gt.create_calendar_event(
+                    DATA_DIR, _cid, _tenant, args.get("subject", ""),
+                    args.get("start", ""), args.get("end", ""),
+                    args.get("attendees", "") or "", args.get("location", "") or "")
+            if name == "list_teams_chats":
+                return await _gt.list_teams_chats(DATA_DIR, _cid, _tenant,
+                                                  int(args.get("count") or 15))
+            if name == "send_teams_message":
+                return await _gt.send_teams_message(DATA_DIR, _cid, _tenant,
+                                                    args.get("chat_id", ""),
+                                                    args.get("message", ""))
 
         elif name == "list_workspace_files":
             files = storage.list_files(ws_id)

@@ -95,6 +95,12 @@ class AppSettings(BaseModel):
     purdue_api_key: str = ""
     default_model: str = "gemma4:26b-a4b"
 
+    # Microsoft Graph connector (Outlook, Teams, Calendar). The client ID is the
+    # Azure app registration's Application (client) ID; tokens live encrypted
+    # beside the data dir, never in settings.json.
+    graph_client_id: str = ""
+    graph_tenant: str = "common"
+
     temperature: float = 0.7
     max_tokens: int = 4096
     browser_headless: bool = True
@@ -129,6 +135,14 @@ class AppSettings(BaseModel):
         "- browse_page: for a single, known, static URL where one fetch of the text is enough.\n"
         "- search_web: for a quick fact where a list of links and snippets will do.\n"
         "- take_screenshot: when the user explicitly wants an image of a page.\n"
+        "MICROSOFT TOOLS (need the Microsoft connector in Settings; if a call says it is not "
+        "connected, tell the user how to connect instead of retrying):\n"
+        "- read_email / search_email: Outlook inbox. search_email takes keywords.\n"
+        "- send_email: only when the user explicitly asks to send an email. Confirm the "
+        "recipient and subject back to them first if either is ambiguous.\n"
+        "- list_calendar_events / create_calendar_event: Outlook calendar.\n"
+        "- list_teams_chats / send_teams_message: Teams chats; list first for the chat id, "
+        "and only send when the user explicitly asks.\n"
         "Do not use browser_task AND browse_page/search_web for the same request; pick the best one.\n\n"
         "BROWSER_TASK TIPS:\n"
         "- Write the goal concretely, including the location, date, or units needed. \"Find tomorrow's "

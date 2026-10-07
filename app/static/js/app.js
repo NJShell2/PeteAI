@@ -53,6 +53,16 @@ const btnTestConnection = document.getElementById("btnTestConnection");
 const btnForgetKey = document.getElementById("btnForgetKey");
 const cfgApiUrl = document.getElementById("cfgApiUrl");
 const cfgApiKey = document.getElementById("cfgApiKey");
+const cfgGraphClientId = document.getElementById("cfgGraphClientId");
+const cfgGraphTenant = document.getElementById("cfgGraphTenant");
+const btnGraphConnect = document.getElementById("btnGraphConnect");
+const btnGraphDisconnect = document.getElementById("btnGraphDisconnect");
+const graphStatusLine = document.getElementById("graphStatusLine");
+const graphCodeBox = document.getElementById("graphCodeBox");
+const graphUserCode = document.getElementById("graphUserCode");
+const graphVerifyLink = document.getElementById("graphVerifyLink");
+const graphPollStatus = document.getElementById("graphPollStatus");
+let graphPollTimer = null;
 const cfgDefaultModel = document.getElementById("cfgDefaultModel");
 const cfgSystemPrompt = document.getElementById("cfgSystemPrompt");
 const connectionStatus = document.getElementById("connectionStatus");
@@ -205,9 +215,53 @@ async function loadSettings() {
       ? "Key saved — leave blank to keep it, or paste a new one"
       : "Paste your GenAI Studio API key";
     cfgSystemPrompt.value = appSettings.system_prompt;
+    cfgGraphClientId.value = appSettings.graph_client_id || "";
+    cfgGraphTenant.value = appSettings.graph_tenant || "";
+    await refreshGraphStatus();
   } catch (e) {
     console.error("Failed to load settings:", e);
   }
+}
+
+async function refreshGraphStatus() {
+  try {
+    const st = await apiGet("/api/graph/status");
+    if (st.connected) {
+      graphStatusLine.innerHTML = `<i class="fa-solid fa-circle-check" style="color: var(--success, #4caf50);"></i> Microsoft connected.`;
+      btnGraphConnect.style.display = "none";
+      btnGraphDisconnect.style.display = "";
+    } else {
+      graphStatusLine.innerHTML = st.has_client_id
+        ? `<i class="fa-solid fa-circle" style="color: var(--text-muted);"></i> Not connected yet. Press Connect Microsoft, then enter the code.`
+        : `<i class="fa-solid fa-circle" style="color: var(--text-muted);"></i> Not connected. Paste your Azure client ID above, save, then connect.`;
+      btnGraphConnect.style.display = "";
+      btnGraphDisconnect.style.display = "none";
+    }
+  } catch (e) {
+    graphStatusLine.textContent = "Could not check Microsoft status.";
+  }
+}
+
+function stopGraphPolling() {
+  if (graphPollTimer) { clearTimeout(graphPollTimer); graphPollTimer = null; }
+  if (graphCodeBox) graphCodeBox.style.display = "none";
+}
+
+async function pollGraphSession(sessionId, intervalMs) {
+  try {
+    const res = await apiPost("/api/graph/poll", { session_id: sessionId });
+    if (res.status === "done") {
+      graphPollStatus.textContent = "Connected!";
+      stopGraphPolling();
+      await refreshGraphStatus();
+      return;
+    }
+  } catch (e) {
+    graphPollStatus.textContent = "Sign-in expired or failed. Press Connect to try again.";
+    stopGraphPolling();
+    return;
+  }
+  graphPollTimer = setTimeout(() => pollGraphSession(sessionId, intervalMs), intervalMs);
 }
 
 function renderModelOptions() {
@@ -1089,8 +1143,8 @@ function setupEventListeners() {
 
   // Settings Modal
   btnOpenSettings.addEventListener("click", () => { settingsModal.style.display = "flex"; });
-  btnCloseSettings.addEventListener("click", () => { settingsModal.style.display = "none"; });
-  btnCancelSettings.addEventListener("click", () => { settingsModal.style.display = "none"; });
+  btnCloseSettings.addEventListener("click", () => { stopGraphPolling(); settingsModal.style.display = "none"; });
+  btnCancelSettings.addEventListener("click", () => { stopGraphPolling(); settingsModal.style.display = "none"; });
 
   btnTestConnection.addEventListener("click", async () => {
     connectionStatus.innerHTML = `<span style="color: var(--purdue-gold);"><i class="fa-solid fa-spinner fa-spin"></i> Testing Purdue RCAC connection...</span>`;
@@ -1131,11 +1185,37 @@ function setupEventListeners() {
       purdue_api_url: cfgApiUrl.value,
       purdue_api_key: cfgApiKey.value,
       default_model: cfgDefaultModel.value,
-      system_prompt: cfgSystemPrompt.value
+      system_prompt: cfgSystemPrompt.value,
+      graph_client_id: cfgGraphClientId.value.trim(),
+      graph_tenant: cfgGraphTenant.value.trim() || "common"
     });
     settingsModal.style.display = "none";
     await loadSettings();
     await loadModels();
+  });
+
+  if (btnGraphConnect) btnGraphConnect.addEventListener("click", async () => {
+    btnGraphConnect.disabled = true;
+    try {
+      const flow = await apiPost("/api/graph/connect", {});
+      graphUserCode.textContent = flow.user_code;
+      if (flow.verification_uri) graphVerifyLink.href = flow.verification_uri;
+      graphCodeBox.style.display = "";
+      graphPollStatus.textContent = "Waiting for you to approve...";
+      stopGraphPolling();
+      const intervalMs = Math.max(3, flow.interval || 5) * 1000;
+      graphPollTimer = setTimeout(() => pollGraphSession(flow.session_id, intervalMs), intervalMs);
+    } catch (e) {
+      graphPollStatus.textContent = "";
+      alert("Could not start Microsoft sign-in: " + (e.message || e));
+      await refreshGraphStatus();
+    } finally {
+      btnGraphConnect.disabled = false;
+    }
+  });
+  if (btnGraphDisconnect) btnGraphDisconnect.addEventListener("click", async () => {
+    await apiPost("/api/graph/disconnect", {});
+    await refreshGraphStatus();
   });
 
   // Architecture Modal
@@ -1145,7 +1225,7 @@ function setupEventListeners() {
 
   // Close modals on backdrop click
   window.addEventListener("click", (e) => {
-    if (e.target === settingsModal) settingsModal.style.display = "none";
+    if (e.target === settingsModal) { stopGraphPolling(); settingsModal.style.display = "none"; }
     if (e.target === fileViewerModal) fileViewerModal.style.display = "none";
     if (e.target === newFileModal) newFileModal.style.display = "none";
     if (e.target === roadmapModal) roadmapModal.style.display = "none";
